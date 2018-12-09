@@ -1,0 +1,607 @@
+@font-face {
+  font-family: 'pixel-font';
+  src: url('/client/basis33.ttf');
+}
+
+body {
+  background: url(/client/img/playstation-pattern.png);
+}
+
+.page {
+  display: table;
+  width: 100%;
+  height: 100%;
+}
+
+#dialog-overlay {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  display: none;
+  width: 100%;
+  height: 100%;
+  background-color: #00000045;
+  z-index: 1000;
+}
+
+#dialog {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px solid black;
+  padding: 3px;
+  background: #fff7bd;
+  width: 85%;
+}
+
+#dialog .content {
+
+}
+
+#dialog .options {
+  display: table;
+  width: 100%;
+  margin-top: 5px;
+}
+
+#dialog .options > span {
+  cursor: pointer;
+  display: table-cell;
+  text-align: center;
+}
+
+#dialog .options > span:hover {
+  text-shadow: 0px 0px 3px #1eda27;
+}
+
+.view {
+  overflow: hidden;
+  width: 176px;
+  height: 220px;
+  border: 1px solid black;
+  position: absolute;
+  background-color: paleturquoise;
+}
+
+#login {
+  display: table;
+}
+
+#login input {
+  width: 138px;
+  height: 30px;
+  font-family: pixel-font;
+  font-size: 24px;
+  padding: 5px;
+  border: 1px solid black;
+  border-radius: 2.5px;
+}
+
+#login input:focus {
+  outline: none;
+  -webkit-box-shadow: inset 0 0 2px #008eff;
+  -moz-box-shadow: inset 0 0 2px #008eff;
+  box-shadow: inset 0 0 2px #008eff;
+  border: 1px solid #0092d4;
+}
+
+#login input::placeholder {
+  color: #00000029;
+}
+
+
+#town {
+  /*overflow: hidden;
+  width: 176px;
+  height: 220px;
+  border: 1px solid black;
+  position: absolute;
+  background-color: paleturquoise;*/
+}
+
+#town-top {
+  background: url(/client/img/town-top.png);
+  background-position: center;
+  background-repeat: no-repeat;
+  display: table;
+  width: 100%;
+  position: relative;
+  height: 21px;
+}
+
+#town-top > span {
+  display: table-cell;
+  text-align: center;
+  cursor: pointer;
+  vertical-align: middle;
+  border-bottom: 1px solid black;
+}
+
+#town-top > span.square {
+  width: 20px;
+}
+
+#town-top > span.back {
+  /*background-color: #00bcd4;*/
+  border-right: 1px solid black;
+}
+
+@keyframes flashWB {
+    0%    { background-size: 16px; }
+    50.0% { background-size: 16px; }
+    50.1% { background-size: 0px; }
+    100%  { background-size: 0px; }
+}
+
+#town-top > span.challenges {
+  background: /*#ffecb3*/ url(/client/img/icons/battle.png);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  border-left: 1px solid black;
+}
+
+#town-top > span.challenges.active {
+  filter: none;
+  animation-name: flashWB;
+  animation-duration: 1s;
+  animation-iteration-count: infinite;
+}
+
+#town-top > span.open {
+  border-bottom: 1px solid #0000;
+}
+
+#town-top > span:hover {
+  /*filter:grayscale(1);*/
+}
+
+#character-info {
+  position: absolute;
+  padding: 0;
+  background-color: #e9ce7c;
+  right: 0;
+  top: 5px;
+  z-index: 100;
+  width: 100%;
+  border-bottom: 1px solid black;
+  top: 21px;
+  display: none;
+}
+
+#character-stats, #character-other {
+  padding: 3px;
+  margin: 0;
+  list-style: none;
+  text-align: left;
+  min-width: 60px;
+}
+
+#character-stats span.plus {
+  position: relative;
+  float: right;
+  right: 4px;
+  padding: 0 0 0 1px;
+  height: 15px;
+  width: 15px;
+  background-color: #fff8e2;
+  cursor: pointer;
+}
+
+#character-stats span.plus:hover {
+  background-color: #ffe79b;
+  outline: 1px solid #a77f04;
+  transition: all ease-out 0.1s;
+}
+
+#challenge-list {
+  position: absolute;
+  padding: 0;
+  background-color: #ffd35f;
+  right: 0;
+  top: 5px;
+  z-index: 100;
+  width: 100%;
+  border-bottom: 1px solid black;
+  display: none;
+}
+
+#challenge-list > li {
+  counter-increment: section;
+  list-style: none;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+#challenge-list > div {
+  counter-reset: section;
+  padding: 2px 4px;
+  background: /*#ffecb3*/#e1a845;
+}
+
+#challenge-list > li:hover {
+  text-shadow: 0.5px 0.5px 1px white;
+}
+
+#challenge-list > li:hover:before {
+  content: '> ' counter(section) '\2317' ' ';
+}
+
+#challenge-list > li::before {
+  content: counter(section) '\2317' ' ';
+}
+
+#town-middle {
+  width: 100%;
+  height: calc(100% - 37px);
+  text-align: center;
+  display: table;
+  overflow-y: auto;
+}
+
+div.row {
+  display: table-row;
+}
+
+div.cell {
+  display: table-cell;
+  vertical-align: middle;
+  text-align: center;
+  text-align: -webkit-center;
+}
+
+.view div.button {
+  cursor: pointer;
+  background-image: url(/client/img/button.png);
+  width: 138px;
+  height: 33px;
+  display: table-cell;
+  vertical-align: middle;
+}
+
+.view div.button:hover {
+  -webkit-filter: sepia(100%);
+}
+
+.view div.button:active {
+  -webkit-filter: contrast(300%);
+}
+
+#town-middle div.logo {
+  background-image: url(/client/img/logo.png);
+  width: 138px;
+  height: 60px;
+  display: table-cell;
+  vertical-align: middle;
+}
+
+#town-middle.block {
+  display: block;
+  counter-reset: title;
+}
+
+.view div.header {
+  display: table-cell;
+  vertical-align: middle;
+  font-size: 16px;
+  padding: 0px 3px;
+  background-color: #edffd7;
+}
+
+.item-block {
+  border: 1px solid #91c8ff;
+  border-radius: 2px;
+  margin: 5px;
+  padding: 3px 0px 0px 0px;
+  background-color: #dcffde;
+  cursor: pointer;
+}
+
+.item-block.active {
+  box-shadow: inset 0 0 10px #36af05;
+  border: 1px solid #4CAF50;
+}
+
+.item-block.disabled {
+  filter: contrast(0.85) grayscale(1);
+}
+
+.item-block.unavailable {
+  background: repeating-linear-gradient( 45deg, #ffffff, #ffffff 10px, #fff4f4 10px, #fff4f4 20px );
+}
+
+
+
+.item-block > .title {
+  text-align: center;
+  border-bottom: 1px solid #91c9ff45;
+}
+
+.item-block > .title::before {
+  counter-increment: title;
+  content: counter(title);
+  float: left;
+  padding-left: 4px;
+  color: darkgrey;
+}
+
+.item-block > .title > .energy {
+  float: right;
+  padding-right: 4px;
+}
+
+.item-block > .title > .energy::before {
+  content: ' ';
+  background: url(/client/img/icons/energy.png) center / 8px no-repeat;
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+}
+
+.item-block > .title div.icon {
+  height: 8px;
+  width: 14px;
+  display: inline-block;
+}
+
+.item-block > .title div.icon.sword {
+  background: url(/client/img/icons/sword.png) center / 8px no-repeat;
+}
+
+.item-block > .title div.icon.axe {
+  background: url(/client/img/icons/axe.png) center / 8px no-repeat;
+}
+
+.item-block > .title div.icon.hammer {
+  background: url(/client/img/icons/hammer.png) center / 8px no-repeat;
+}
+
+.item-block > .title div.icon.bow {
+  background: url(/client/img/icons/bow.png) center / 8px no-repeat;
+}
+
+.item-block > .title div.icon.fire-bow {
+  background: url(/client/img/icons/fire-bow.png) center / 8px no-repeat;
+}
+
+.item-block > .title div.icon.bomb {
+  background: url(/client/img/icons/bomb.png) center / 8px no-repeat;
+}
+
+.item-block > .title div.icon.fire-bomb {
+  background: url(/client/img/icons/fire-bomb.png) center / 8px no-repeat;
+}
+
+.item-block > .title div.icon.trap {
+  background: url(/client/img/icons/trap.png) center / 8px no-repeat;
+}
+
+.item-block > .title div.icon.armor {
+  background: url(/client/img/icons/armor.png) center / 8px no-repeat;
+}
+
+.item-block > .title div.icon.other {
+  background: url(/client/img/icons/other.png) center / 8px no-repeat;
+}
+
+.item-block > .type {
+  text-align: center;
+  font-size: 8px;
+  margin-top: -3px;
+}
+
+.item-block > .content {
+  padding-top: 6px;
+}
+
+.item-block > .content > div {
+  display: inline-block;
+  margin: -1px;
+}
+
+.item-block > .content > div.desc {
+  font-size: 8px;
+  padding: 0px 4px 4px 4px;
+  text-align: left;
+}
+
+.item-block > .content span {
+  float: left;
+}
+
+.item-block > .content span.icon {
+  height: 13px;
+  width: 8px;
+}
+
+.item-block > .content span.icon.dmg {
+  background: url(/client/img/icons/weapon.png) center / 8px no-repeat;
+}
+
+.item-block > .content span.icon.speed {
+  background: url(/client/img/icons/speed.png) center / 8px no-repeat;
+}
+
+.item-block > .content span.icon.precision {
+  background: url(/client/img/icons/prec.png) center / 8px no-repeat;
+}
+
+.item-block > .content span.icon.req {
+  background: url(/client/img/icons/requirements.png) center / 8px no-repeat;
+}
+
+.item-block > .content span.icon.weight {
+  background: url(/client/img/icons/weight.png) center / 8px no-repeat;
+}
+
+.item-block > .content span.icon.absorb {
+  background: url(/client/img/icons/absorb.png) center / 8px no-repeat;
+}
+
+.item-block > .content span.icon.evade-penalty {
+  background: url(/client/img/icons/evade-penalty2.png) center / 8px no-repeat;
+}
+
+.item-block > .content span.icon.energy {
+  background: url(/client/img/icons/energy.png) center / 8px no-repeat;
+}
+
+.item-block > .content span.icon.spell-damage {
+  background: url(/client/img/icons/spell-damage.png) center / 8px no-repeat;
+}
+
+.item-block > .content span.icon.heal {
+  background: url(/client/img/icons/heal.png) center / 8px no-repeat;
+}
+
+.item-block > .content span.icon.fizzle {
+  background: url(/client/img/icons/fizzle.png) center / 8px no-repeat;
+}
+
+#town-bottom {
+  /*position: absolute;*/
+  bottom: 0px;
+  width: 100%;
+  height: 16px;
+  background: cornsilk;
+}
+
+#action-bar {
+  list-style-type: none;
+  padding: 0px;
+}
+
+#action-bar > li {
+  width: 50px;
+  height: 50px;
+  border: 1px solid black;
+  display: inline-block;
+  text-align: center;
+  line-height: 3;
+  cursor: pointer;
+}
+#action-bar > li:hover {
+  background-color: #dfdfdf;
+}
+#action-bar > li > ul {
+  position: absolute;
+  padding: 0px;
+}
+#action-bar > li > ul > li {
+  list-style-type: none;
+  margin-top: 3px;
+  width: 50px;
+  background: bisque;
+  line-height: initial;
+}
+#action-bar > li > ul > li:hover {
+  background: aliceblue;
+}
+
+#action-bar > li[data-type="move"]::before {
+  content: "Move";
+}
+#action-bar > li[data-type="defend"]::before {
+  content: "Defend";
+}
+#action-bar > li[data-type="melee"]::before {
+  content: "Melee";
+}
+#action-bar > li[data-type="range"]::before {
+  content: "Range";
+}
+#action-bar > li[data-type="magic"]::before {
+  content: "Magic";
+}
+
+#gameDiv {
+  /*display: none;*/
+  text-align: left;
+  box-shadow: 0 0 5px black;
+  transform: scale(2);
+  transform-origin: center;
+  touch-action: none;
+  font-family: 'pixel-font';
+  image-rendering: pixelated;
+  overflow: hidden;
+  width: 178px;
+  height: 222px;
+  position: relative;
+}
+
+#overlay-action-bar {
+  position: absolute;
+  width: 176px;
+  margin-left: 1px;
+}
+
+#overlay-action-bar > div.inner {
+  position: absolute;
+  width: 100%;
+  bottom: 23px;
+  /*background-color: #c1b19a;
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;*/
+  image-rendering: pixelated;
+}
+
+#overlay-action-bar > div > ul {
+  padding: 0px;
+  margin: 0px;
+  list-style: none;
+  counter-reset: section;
+  display: none;
+  background-image: url(/client/img/action-bg.png);
+  /*max-height: 100px;
+  overflow-y: auto;*/
+}
+
+#overlay-action-bar > div > ul > li {
+  border-bottom: 1px solid #0000001f;
+  padding: 1px 0px 1px 6px;
+  cursor: pointer;
+  font-size: 16;
+  position: relative;
+}
+
+#overlay-action-bar > div > ul > li::after {
+  counter-increment: section;
+  position: absolute;
+  right: 4px;
+  content: '[' counter(section) ']';
+  color: #463f35;
+}
+
+#overlay-action-bar > div > ul > li.hovered {
+  /*background-color: #e0d3c0;*/
+  text-shadow: 0px 0px 3px #1eda27;
+}
+
+#overlay-action-bar > div > ul > li.hovered::before {
+  content: '\00BB';
+}
+#overlay-action-bar > div > ul > li:first-child {
+  padding-top: 6px;
+}
+#overlay-action-bar > div > ul > li:last-child {
+  border-bottom: 0px solid grey;
+}
+canvas {
+  image-rendering: optimizeSpeed;             /*                     */
+  image-rendering: -moz-crisp-edges;          /* Firefox             */
+  image-rendering: -o-crisp-edges;            /* Opera               */
+  image-rendering: pixelated; /* Chrome (and Safari) */
+  image-rendering: optimize-contrast;         /* CSS3 Proposed       */
+  -ms-interpolation-mode: nearest-neighbor;   /* IE8+                */
+}
+.noselect {
+-webkit-touch-callout: none; /* iOS Safari */
+  -webkit-user-select: none; /* Safari */
+   -khtml-user-select: none; /* Konqueror HTML */
+     -moz-user-select: none; /* Firefox */
+      -ms-user-select: none; /* Internet Explorer/Edge */
+          user-select: none; /* Non-prefixed version, currently
+                                supported by Chrome and Opera */
+-webkit-tap-highlight-color: rgba(255, 255, 255, 0);
+}

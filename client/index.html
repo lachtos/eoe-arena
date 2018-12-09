@@ -1,0 +1,1355 @@
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<head>
+  <link rel="stylesheet" type="text/css" href="/client/style.css">
+</head>
+
+<div class="page">
+  <div class="cell">
+    <div id="gameDiv" class='noselect'>
+      <div id="login" class="view">
+        <div class="row"><div class="cell"><div class="header">Please log in using your account details or create a new account.</div></div></div>
+        <div class="row"><div class="cell"><input id="auth-user" type="text" placeholder="Username"></input></div></div>
+        <div class="row"><div class="cell"><input id="auth-pass" type="password" placeholder="Password"></input></div></div>
+        <div class="row"><div class="cell"><div id="button.login" class="button">Login</div></div></div>
+        <div class="row"><div class="cell"><div id="button.register" class="button">Register</div></div></div>
+      </div>
+      <div id="town" class="view">
+        <div id="town-top">
+          <span class="square back"><</span>
+          <span id="character-span">placeholder</span>
+          <span class="square challenges"></span>
+          <div id="character-info">
+            <div class="cell"><ul id="character-stats"></ul></div>
+            <div class="cell"><ul id="character-other"></ul></div>
+          </div>
+          <ul id="challenge-list"></ul>
+        </div>
+        <div id="town-middle">
+          <div class="row"><div class="cell"><div class="button">Arena</div></div></div>
+          <div class="row"><div class="cell"><div class="button">Skills & Spells</div></div></div>
+          <div class="row"><div class="cell"><div class="button">Equipment</div></div></div>
+        </div>
+        <div id="town-bottom">
+          chat: unavailable
+        </div>
+      </div>
+      <div id="arena">
+        <canvas id="canvas" width="176" height="220" style="border: 1px solid black;"></canvas>
+        <div id="overlay-action-bar">
+          <div class="inner">
+            <ul data-type="move"  ></ul>
+            <ul data-type="defend"></ul>
+            <ul data-type="melee" ></ul>
+            <ul data-type="range" ></ul>
+            <ul data-type="magic" ></ul>
+            <ul data-type="magic2" ></ul>
+            <ul data-type="talk" ></ul>
+            <ul data-type="end" ></ul>
+          </div>
+        </div>
+      </div>
+      <div id="dialog-overlay">
+        <div id="dialog">
+          <div class="content"></div>
+          <div class="options"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+<div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
+<script src="/client/js/libs/js.cookie.js"></script>
+<script src="/client/js/libs/md5.min.js"></script>
+<script src="/client/js/libs/ajax.js"></script>
+<script src="/client/js/libs/dialog.js"></script>
+<script src="/shared/utils.js"></script>
+<script src="/client/js/core.js"></script>
+<script src="/client/js/user.js"></script>
+<script src="/client/js/smw.js"></script>
+<script src="/client/js/ui.js"></script>
+<script>
+  function loadImage (src) {
+    var img = new Image();
+    img.src = src;
+    return img;
+  };
+  var SHARED = module.exports;
+
+  var ASSETS = {
+    ACTION_SPRITES: {
+      move: loadImage("/client/img/action-icons/move.png"),
+      melee: loadImage("/client/img/action-icons/melee.png"),
+      range: loadImage("/client/img/action-icons/range.png"),
+      magic: loadImage("/client/img/action-icons/magic.png"),
+      magic2: loadImage("/client/img/action-icons/magic2.png"),
+      defend: loadImage("/client/img/action-icons/defend.png"),
+      talk: loadImage("/client/img/action-icons/talk.png"),
+      end: loadImage("/client/img/action-icons/end.png"),
+    },
+    SPRITES: {
+      battlefield: loadImage("/client/img/battlefield.png"),
+      check: loadImage("/client/img/check.png"),
+      torso: loadImage("/client/img/torso.png"),
+      heads: loadImage("/client/img/heads.png"),
+      weapons: loadImage("/client/img/weapons.png"),
+      ammu: loadImage("/client/img/ammu.png"),
+      action_bar: loadImage("/client/img/action-bar.png"),
+      hovered_action: loadImage("/client/img/hovered-action.png"),
+      selected_action: loadImage("/client/img/selected-action.png"),
+    },
+  };
+
+  var CANVAS = {
+    canvas: document.getElementById('canvas'),
+    actions: ['move', 'melee', 'range', 'defend', 'magic', 'magic2', 'talk', 'end'],
+    top_h: 52, // top bar height in pixels
+    bfieldfull_h: 130, // battle field full height
+    bfieldfull_w: 176, // battle field full width
+    bfieldlower_h: 53, // lower part of battle field, where the tiles are
+    actions_h: 16, // height of input actions bar
+    bottom_h: 22, // bottom bar height (status bar/action bar)
+    tiles_x: 6, // tile count on x axis
+    tiles_y: 4, // tile count on y axis
+    char_w: 30, // width of character
+    char_h: 44, // height of character
+    head_w: 13, // width of head
+    head_h: 11, // height of head,
+    weapon_w: 28,
+    weapon_h: 28,
+    ammu_w: 20,
+    ammu_h: 20,
+    touchDown: false,
+    pointerDownPos: {},
+    hoveredAction: 0,
+    selectedAction: null,
+    hoveredActionTarget: null,
+  };
+  CANVAS.bfieldhigher_h = CANVAS.bfieldfull_h - CANVAS.bfieldlower_h;
+  CANVAS.bfield_offset_y = CANVAS.top_h + CANVAS.bfieldhigher_h;
+  CANVAS.tile_w = CANVAS.canvas.width / CANVAS.tiles_x; // width of a tile
+  CANVAS.tile_h = CANVAS.bfieldlower_h / CANVAS.tiles_y; // height of a tile
+
+  CANVAS.getTileByPosition = function (x, y) {
+    var tile = {
+      x: Math.floor(x / CANVAS.tile_w),
+      y: Math.floor((y - CANVAS.bfield_offset_y) / CANVAS.tile_h)
+    };
+    return tile;
+  };
+
+  CANVAS.HEAD_ORDER = [
+    1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0,
+  ];
+
+  CANVAS.HEAD_OFFSETS = [
+  // NX  NY  EX  EY  SX  SY  WX  WY
+    [14, 11, 13, 10, 16, 10, 18, 10], // standing
+    [14, 09, 16, 10, 15, 10, 15, 10], // move 1
+    [15, 07, 17, 09, 16, 11, 14, 09], // move 2
+    [17, 09, 16, 10, 16, 10, 15, 10], // move 3
+    [15, 07, 17, 09, 15, 11, 14, 09], // move 4
+    [15, 14, 12, 11, 16, 12, 19, 11], // melee hit 1
+    [13, 14, 15, 11, 15, 14, 16, 11], // melee hit 2
+    [17, 14, 17, 15, 17, 20, 14, 15], // melee hit 3
+    [14, 11, 14, 12, 16, 12, 17, 12], // melee hit 4 - unused
+    [17, 10, 13, 12, 18, 12, 18, 12], // get hit 1
+    [15, 11, 17, 11, 16, 12, 14, 11], // get hit 2
+    [19, 08, 12, 06, 10, 09, 19, 06], // dodge 1
+    [16, 09, 12, 12, 14, 10, 19, 12], // dodge 2
+    [11, 11, 09, 13, 18, 10, 22, 13], // range 1
+    [15, 16, 09, 16, 16, 12, 22, 16], // range 2
+    [14, 15, 09, 16, 16, 12, 22, 16], // range 3
+    [14, 15, 09, 16, 16, 12, 22, 16], // range 4
+    [13, 10, 16, 13, 15, 13, 15, 13], // toss bomb 1 / close magic 1
+    [14, 14, 12, 15, 19, 20, 21, 15], // toss bomb 2 / close magic 2
+    [14, 14, 12, 15, 19, 20, 21, 15], // toss bomb 3
+    [15, 07, 13, 09, 18, 10, 18, 09], // explode 1
+    [18, 04, 11, 06, 19, 07, 20, 06], // explode 2
+    [14, 09, 16, 13, 16, 10, 15, 13], // magic long 1
+    [15, 12, 16, 13, 15, 14, 15, 13], // magic long 2
+    [15, 15, 16, 14, 16, 13, 15, 14], // magic long 3
+    [15, 09, 16, 13, 16, 10, 15, 13], // magic long 4
+    [15, 09, 16, 13, 16, 10, 15, 13], // magic long 5 / magic other 1
+    [14, 11, 12, 10, 16, 10, 19, 10], // hit by magic 1
+    [14, 04, 12, 03, 16, 05, 19, 03], // hit by magic 2 / death 1
+    [14, 14, 12, 10, 15, 14, 19, 10], // death 2
+    [15, 27, 12, 24, 15, 26, 19, 24], // death 3
+    [15, 35, 11, 35, 19, 32, 20, 35], // death 4
+  // NX  NY  EX  EY  SX  SY  WX  WY
+  ];
+
+  CANVAS.HAND_OFFSETS = {
+    5: [19, 25, 24, 03, 14, 24, 07, 03],
+    6: [30, 17, 03, 06, 03, 16, 28, 06],
+    7: [14, 02, 29, 23, 23, 29, 02, 23],
+    //8: [25, 22, 25, 16, 14, 24, 06, 16]
+  };
+
+  CANVAS.WEAPON_OFFSETS = [
+    [23, 24, 11, 24, 05, 23, 11, 11, 23, 05, 18, 11, 24, 23, 18, 24, 14, 20], // sword
+    [23, 22, 11, 24, 06, 19, 08, 12, 19, 07, 21, 12, 23, 19, 18, 24, 23, 22], // axe
+    [22, 22, 10, 23, 07, 21, 08, 10, 21, 07, 21, 10, 22, 21, 19, 23, 22, 19], // hammer
+  ];
+
+  CANVAS.WEAPON_INDEXES = {
+    //   N   E   S   W
+    5: [ 2,  7,  6,  1],
+    6: [ 3,  5,  0,  3],
+    7: [ 8,  2,  3,  6],
+    8: [10,  0, 10,  0], // unused
+  };
+
+  CANVAS.actionHover = function (index) {
+    if (index < 0) index = CANVAS.actions.length - 1;
+    else if (index >= CANVAS.actions.length) index = 0;
+    CANVAS.hoveredAction = index;
+  };
+
+  CANVAS.actionSelect = function (index, force_select) {
+    if (index == CANVAS.selectedAction) { // deselect
+      if (!force_select) {
+        CLIENT.action_bar_types[CANVAS.actions[index]].style.display = "none";
+        CANVAS.hoveredAction = index;
+        CANVAS.selectedAction = null;
+      }
+    } else {
+      CANVAS.hoveredAction = index;
+      CANVAS.selectedAction = index;
+
+      for (var i in CLIENT.action_bar_types) {
+        var t = CLIENT.action_bar_types[i];
+        if (i == CANVAS.actions[index]) {
+          t.style.display = "block";
+        } else {
+          t.style.display = "none";
+        }
+      }
+    }
+  };
+
+  CANVAS.actionDeselect = function () {
+    for (var i in CLIENT.action_bar_types) {
+      var t = CLIENT.action_bar_types[i];
+      t.style.display = "none";
+    }
+    CANVAS.selectedAction = null;
+  };
+
+  CANVAS.hoverActionTarget = function (target) {
+    for (var t in CLIENT.action_bar_types) {
+      var type = CLIENT.action_bar_types[t];
+      for (var j = 0; j < type.children.length; ++j) {
+        var li = type.children[j];
+        if (li == target) li.classList.add('hovered');
+        else              li.classList.remove('hovered');
+      }
+    }
+    CANVAS.hoveredActionTarget = target;
+  };
+
+  CANVAS.unhoverActionTarget = function () {
+    CANVAS.hoveredActionTarget.classList.remove('hovered');
+    CANVAS.hoveredActionTarget = null;
+  };
+
+
+
+  CLIENT.init = function () {
+    this.socket = io();
+    this.ctx = CANVAS.canvas.getContext('2d');
+    this.gameDiv = document.getElementById("gameDiv");
+    this.townDiv = document.getElementById("town");
+    this.initCanvasEvents();
+    this.dialog = document.getElementById("dialog");
+    this.ui = new CLIENT.UI(this);
+
+    this.socket.on('connect', function () {
+      CLIENT.authenticateUser(function (response) {
+        if (response.status) {
+          CLIENT.user = new CLIENT.User(response.user);
+          CLIENT.emit("request-online", {});
+          CLIENT.ui.screen("town");
+        } else {
+          CLIENT.ui.screen("login");
+        }
+      });
+    });
+  };
+
+  CLIENT.authenticateUser = function (callback) {
+    CLIENT.ui.screen('login');
+
+    var token = Cookies.get('token');
+    if (!token) return false;
+
+    var dlg = new Dialog("Connecting to server...", []);
+    dlg.show();
+
+    ajax.post('authenticate', { token: token, socket_id: CLIENT.socket.id }, function (response) {
+      callback(response);
+      dlg.hide();
+    });
+  };
+
+  CLIENT.initCanvasEvents = function () {
+
+    function pointerOut () {
+      CLIENT.pointerPos.x = null;
+      CLIENT.pointerPos.y = null;
+    };
+
+    this.ctx.canvas.onpointermove = function (e) {
+      if (!CLIENT.game || (CANVAS.pointerDownPos.x == e.offsetX && CANVAS.pointerDownPos.y == e.offsetY)) return;
+
+      if (e.offsetY > CANVAS.bfield_offset_y && e.offsetY <= CANVAS.top_h + CANVAS.bfieldfull_h) {
+        var t = CANVAS.getTileByPosition(e.offsetX, e.offsetY);
+        e.tileX = t.x;
+        e.tileY = t.y;
+        if (e.tileX != CLIENT.pointerPos.x || e.tileY != CLIENT.pointerPos.y) {
+          e.tilePrevX = CLIENT.pointerPos.x;
+          e.tilePrevY = CLIENT.pointerPos.y;
+          CLIENT.pointerMove(e);
+        }
+      } else if (e.offsetY > CANVAS.top_h + CANVAS.bfieldfull_h + CANVAS.actions_h && CLIENT.game.state == 'action_input') {
+        if (CANVAS.touchDown) {
+          CANVAS.actionSelect(Math.floor(e.offsetX / CANVAS.canvas.width * CANVAS.actions.length), 1);
+        } else {
+          CANVAS.actionHover(Math.floor(e.offsetX / CANVAS.canvas.width * CANVAS.actions.length));
+        }
+      } else {
+        pointerOut();
+      }
+    };
+
+    this.ctx.canvas.onpointerdown = function (e) {
+      var x = e.offsetX;
+      var y = e.offsetY;
+      CANVAS.pointerDownPos = {x:x, y:y}
+      CLIENT.pointerDown(x, y);
+    };
+
+    CLIENT.gameDiv.ontouchstart = this.ctx.canvas.onmousedown = function (e) {
+      CANVAS.touchDown = true;
+    };
+
+    CLIENT.gameDiv.ontouchend = this.ctx.canvas.onmouseup = function (e) {
+      CANVAS.touchDown = false;
+    };
+
+    function selectHoveredAndHoverLowest () {
+      CANVAS.actionSelect(CANVAS.hoveredAction);
+      var t = CLIENT.action_bar_types[CANVAS.actions[CANVAS.selectedAction]].children;
+      CANVAS.hoverActionTarget(t[t.length - 1]);
+    };
+
+    document.onkeydown = function (e) {
+      if (!CLIENT.ingame || CLIENT.game.state == 'visualize_turn') return;
+      var key = e.key.toLowerCase();
+      if        (key == 'a' || key == 'arrowleft') {
+        CANVAS.moveHover(3);
+      } else if (key == 'd' || key == 'arrowright') {
+        CANVAS.moveHover(1);
+      } else if (key == 'w' || key == 'arrowup') {
+        CANVAS.moveHover(0);
+      } else if (key == 's' || key == 'arrowdown') {
+        CANVAS.moveHover(2);
+      } else if (key == ' ' || key == 'enter') {
+        if (CLIENT.mode == 'move') {
+          CLIENT.tileClick(CLIENT.lastTile);
+        } else if (CANVAS.selectedAction == null) {
+          selectHoveredAndHoverLowest();
+        } else if (CANVAS.hoveredActionTarget != null) {
+          CANVAS.hoveredActionTarget.click();
+        }
+      } else if (['1', '2', '3', '4', '5', '6', '7', '8'].indexOf(key) != -1) {
+        key = parseInt(key);
+        if (CANVAS.selectedAction == null) {
+          CANVAS.actionHover(key - 1);
+          selectHoveredAndHoverLowest();
+        } else {
+          var t = CLIENT.action_bar_types[CANVAS.actions[CANVAS.selectedAction]].children;
+          if (t.length >= key) {
+            CANVAS.hoverActionTarget(t[key - 1]);
+            CANVAS.hoveredActionTarget.click();
+          }
+        }
+      } else if (key == 'escape' || key == '0') {
+        CANVAS.actionDeselect();
+      } else if (key == 'backspace') {
+        CLIENT.removeLastAction();
+        if (CLIENT.mode == 'move') {
+          CLIENT.mode = '';
+        }
+      }
+    };
+
+    CANVAS.moveHover = function (dir) {
+      if (CLIENT.mode == 'move') {
+        var tile = { x: CLIENT.lastTile.x, y: CLIENT.lastTile.y };
+        switch (dir) {
+          case 0:
+            tile.y--;
+            break;
+          case 1:
+            tile.x++;
+            break;
+          case 2:
+            tile.y++;
+            break;
+          case 3:
+            tile.x--;
+            break;
+        }
+        CLIENT.tileClick(tile);
+      } else {
+        switch (dir) {
+          case 0: // up
+            if (CANVAS.selectedAction == null || CANVAS.selectedAction != CANVAS.hoveredAction) {
+              selectHoveredAndHoverLowest();
+            } else {
+              var t = Array.from(CLIENT.action_bar_types[CANVAS.actions[CANVAS.selectedAction]].children);
+              var index = t.indexOf(CANVAS.hoveredActionTarget);
+              CANVAS.hoverActionTarget(t[Math.max(0, --index)]);
+            }
+            break;
+          case 1: // right
+            CANVAS.actionHover(CANVAS.hoveredAction + 1);
+            if (CANVAS.selectedAction != null) {
+              selectHoveredAndHoverLowest();
+            }
+            break;
+          case 2: // down
+            if (CANVAS.selectedAction != null) {
+              var t = Array.from(CLIENT.action_bar_types[CANVAS.actions[CANVAS.selectedAction]].children);
+              var index = t.indexOf(CANVAS.hoveredActionTarget);
+              if (index + 1 >= t.length) {
+                CANVAS.unhoverActionTarget();
+                CANVAS.actionDeselect();
+              } else {
+                CANVAS.hoverActionTarget(t[++index]);
+              }
+            }
+            break;
+          case 3: // left
+            CANVAS.actionHover(CANVAS.hoveredAction - 1);
+            if (CANVAS.selectedAction != null) {
+              selectHoveredAndHoverLowest();
+            }
+            break;
+        }
+      }
+    };
+
+    this.ctx.canvas.onpointerup = CLIENT.pointerUp;
+    this.ctx.canvas.onpointerout = pointerOut;
+  };
+
+  CLIENT.init();
+
+  CLIENT.pointerMove = function (e) {
+    CLIENT.pointerPos.x = e.tileX;
+    CLIENT.pointerPos.y = e.tileY;
+  };
+
+  CLIENT.pointerDown = function (x, y) {
+    if (y > CANVAS.bfield_offset_y && y <= CANVAS.top_h + CANVAS.bfieldfull_h) {
+      var t = CANVAS.getTileByPosition(x, y);
+      CLIENT.tileClick(t);
+    } else if (y > CANVAS.top_h + CANVAS.bfieldfull_h + CANVAS.actions_h && CLIENT.game.state == 'action_input') {
+      CANVAS.actionSelect(Math.floor(x / CANVAS.canvas.width * CANVAS.actions.length));
+    }
+  };
+
+  CLIENT.tileClick = function (t) {
+    if (CLIENT.mode == 'move') {
+      if (CLIENT.lastTile.x == t.x && CLIENT.lastTile.y == t.y) {
+        // action confirmed
+        CLIENT.confirmMove();
+      } else if (SHARED.arePositionsAdjacent(t, CLIENT.lastTile) && t.x >= 0 && t.y >= 0 && t.x < CANVAS.tiles_x && t.y < CANVAS.tiles_y) {
+        // TODO: add action, reduce energy by cost etc
+        var cost = CLIENT.game.player.actions[CLIENT.game.currentActions[CLIENT.game.currentActions.length - 1].action.toUpperCase()].cost;
+        if (CLIENT.reduceEnergy(cost)) {
+          CLIENT.moveTiles.push(t);
+          CLIENT.lastTile = t;
+          if (CLIENT.game.energyLeft < cost) {
+            CLIENT.confirmMove();
+          }
+        } else {
+          console.log("Not enough energy!");
+        }
+      }
+    }
+  };
+
+  CLIENT.pointerUp = function (e) {
+
+  };
+
+  CLIENT.confirmMove = function () {
+    CLIENT.mode = '';
+    CLIENT.game.currentActions[CLIENT.game.currentActions.length - 1].data = CLIENT.moveTiles;
+    CLIENT.game.sendCurrentActions();
+  };
+
+  CLIENT.reduceEnergy = function (value) {
+    // update current energy by adding value given
+    // return false if not enough energy or true if successfull
+    if (CLIENT.game.energyLeft - value >= 0) {
+      CLIENT.animateProperty("playerenergy", CLIENT.game.energyLeft, CLIENT.game.energyLeft - value, 500);
+      CLIENT.game.energyLeft -= value;
+      return true;
+    } else return false;
+  };
+
+  CLIENT.removeLastAction = function () {
+    if (CLIENT.mode == 'move') CLIENT.confirmMove();
+    if (CLIENT.game.currentActions.length == 0) return;
+    var removed = CLIENT.game.currentActions.splice(-1, 1);
+    var count = 1;
+    CLIENT.game.sendCurrentActions();
+    // recalculate last tile
+    var found = false;
+    for (var i = 0; i < CLIENT.game.currentActions.length; ++i) {
+      var a = CLIENT.game.currentActions[i];
+      if (a.action.split('-')[0] == 'move' && a.data.length > 0) {
+        CLIENT.lastTile = a.data[a.data.length - 1];
+        found = true;
+      }
+    }
+    if (!found) {
+      CLIENT.lastTile = {
+        x: CLIENT.game.player.posx,
+        y: CLIENT.game.player.posy
+      };
+    }
+
+    // refund energy
+    if (removed[0].action.split('-')[0] == "move") count = removed[0].data.length;
+    var cost = CLIENT.game.player.actions[removed[0].action.toUpperCase()].cost;
+    if (cost) CLIENT.reduceEnergy(-cost * count);
+  };
+
+  CLIENT.Game = function (data) {
+    this.player = {
+      id: data.p.id,
+      name: data.p.name,
+      posx: data.p.posx,
+      posy: data.p.posy,
+      hp: data.p.hp,
+      maxHp: data.p.hp,
+      actions: data.p.actions,
+      spriteIndex: 0,
+      weapon: data.p.weapon,
+      weaponIndex: 10,
+      bow: data.p.bow,
+      bomb: data.p.bomb,
+    }
+
+    this.enemy = {
+      id: data.e.id,
+      name: data.e.name,
+      posx: data.e.posx,
+      posy: data.e.posy,
+      spriteIndex: 0,
+      weapon: data.e.weapon,
+      weaponIndex: 10,
+      bow: data.e.bow,
+      bomb: data.e.bomb,
+    }
+
+    CLIENT.ingame = true;
+
+    this.currentActions = [];
+    this.turnLeft = 1;
+    this.energyLeft = 100;
+    CLIENT.animatedProperties.hp = data.p.hp;
+    this.ammuSprite = [5, 3]; // empty sprite
+    this.ammuPos = null;
+
+    CLIENT.lastTile = { x: this.player.posx, y: this.player.posy };
+
+    this.state = 'action_input';
+    this.status = {};
+
+    window.requestAnimationFrame(CLIENT.render);
+  };
+
+  CLIENT.Game.prototype.initActionBar = function () {
+    // new
+    var bar_inner_div = document.getElementById("overlay-action-bar").children[0];
+    for (var i = 0; i < bar_inner_div.children.length; ++i) {
+      var t = bar_inner_div.children[i].dataset.type
+      CLIENT.action_bar_types[t] = bar_inner_div.children[i];
+      CLIENT.action_bar_types[t].innerHTML = "";
+    }
+
+    var type, action, cost;
+    for (var act in this.player.actions) {
+      type = act.split('-')[0].toLowerCase();
+      id = this.player.actions[act].id;
+      cost = this.player.actions[act].cost;
+      name = act.split('-')[1].toLowerCase().replace(/_/g, ' ');
+      name = name.charAt(0).toUpperCase() + name.slice(1);
+
+      var li = document.createElement("li");
+      li.dataset.id = id;
+      li.dataset.action = act.toLowerCase();
+      li.dataset.cost = cost;
+      li.innerHTML = name;
+
+      CLIENT.action_bar_types[type].appendChild(li);
+    }
+  };
+
+  CLIENT.Game.prototype.showStatus = function (pid, msg, time) {
+    clearTimeout(this.statusTimeout);
+
+    CLIENT.game.status.pid = pid;
+    CLIENT.game.status.msg = msg;
+    CLIENT.game.status.show = false;
+
+    this.statusTimeout = setTimeout(function () {
+      CLIENT.game.status.show = true;
+    }, time);
+  };
+
+  CLIENT.Game.prototype.calculateFacings = function () {
+    // calculate facing direction of player and enemy
+    var pt = {x: Math.round(CLIENT.game.player.posx), y: Math.round(CLIENT.game.player.posy)};
+    var et = {x: Math.round(CLIENT.game.enemy.posx), y: Math.round(CLIENT.game.enemy.posy)};
+    if (pt.x == et.x) {
+      CLIENT.game.player.facing = pt.y > et.y ? 0 : 2;
+      CLIENT.game.enemy.facing = pt.y > et.y ? 2 : 0;
+    } else {
+      CLIENT.game.player.facing = pt.x > et.x ? 3 : 1;
+      CLIENT.game.enemy.facing = pt.x > et.x ? 1 : 3;
+    }
+  };
+
+  CLIENT.updateOnlineList = function (data) {
+    if (CLIENT.user) {
+      CLIENT.online = [];
+      for (var i = 0; i < data.players.length; ++i) {
+        if (data.players[i].id != CLIENT.user.id) {
+          CLIENT.online.push(data.players[i]);
+        }
+      }
+    }
+  };
+
+  CLIENT.showChallengeRequest = function (data) {
+    CLIENT.challenges.push(data);
+    CLIENT.ui.updateChallenges();
+
+  };
+
+  CLIENT.updateChallenges = function (data) {
+    var sc = {};
+    for (var i = 0; i < data.sent.length; ++i) {
+      sc[data.sent[i].id] = {
+        id: data.sent[i].id,
+        name: data.sent[i].name,
+        lvl: data.sent[i].lvl,
+        respect: data.sent[i].respect,
+      };
+    }
+    CLIENT.sent_challenges = sc;
+
+    var received_new = false;
+    var rc = {};
+    for (var i = 0; i < data.received.length; ++i) {
+      if (!CLIENT.received_challenges.hasOwnProperty(data.received[i].id)) {
+        received_new = true;
+      }
+      rc[data.received[i].id] = {
+        id: data.received[i].id,
+        name: data.received[i].name,
+        lvl: data.received[i].lvl,
+        respect: data.received[i].respect,
+      };
+    }
+    CLIENT.received_challenges = rc;
+
+    CLIENT.ui.updateChallengesUI(received_new);
+  };
+
+  CLIENT.gameStart = function (data) {
+    var gameDiv = document.getElementById("arena");
+    gameDiv.style.display = "inline-block";
+
+    CLIENT.game = new CLIENT.Game(data);
+    CLIENT.game.initActionBar();
+
+    CLIENT.game.calculateFacings();
+
+    CLIENT.townDiv.style.display = "none";
+
+    var time_left = 5;
+    var dlg = new Dialog("Game starts in <span id='timer'>" + time_left + "</span> seconds...", []);
+    dlg.setTop("12%");
+    dlg.show();
+    var interval = setInterval(function () {
+      document.getElementById("timer").innerHTML = --time_left;
+    }, 1000);
+    setTimeout(function () { dlg.hide(); clearInterval(interval); }, time_left * 1000);
+  };
+
+  CLIENT.turnStart = function (data) {
+    console.log("Turn started.");
+
+    CLIENT.game.state = 'action_input';
+    CLIENT.game.status.msg = "";
+    CLIENT.game.status.show = false;
+    CLIENT.game.currentActions = [];
+    CLIENT.game.energyLeft = 100;
+    CLIENT.animatedProperties.energy = 100;
+    CLIENT.moveTiles = [];
+
+    // synchronize client side with the data received from SERVER
+    CLIENT.game.player.posx = data.data.p.posx;
+    CLIENT.game.player.posy = data.data.p.posy;
+    CLIENT.game.enemy.posx = data.data.e.posx;
+    CLIENT.game.enemy.posy = data.data.e.posy;
+    CLIENT.lastTile = { x: CLIENT.game.player.posx, y: CLIENT.game.player.posy };
+    CLIENT.game.player.hp = data.data.p.hp;
+
+    var gameDiv = CLIENT.gameDiv;
+    var turnStartTime = + new Date();
+
+    gameDiv.onclick = function (e) {
+      if (CLIENT.game.state != 'action_input') return;
+
+      if (!e.target.dataset.hasOwnProperty('action') || !e.target.dataset.hasOwnProperty('cost')) {
+        var cX = e.clientX || e.changedTouches[0].clientX;
+        var cY = e.clientY || e.changedTouches[0].clientY;
+        var target = document.elementFromPoint(cX, cY);
+      } else {
+        var target = e.target;
+      }
+
+      var id = target.dataset.id;
+      var action = target.dataset.action;
+      var cost = target.dataset.cost;
+      var data = {};
+
+      if (action && CLIENT.mode == 'move') {
+        CLIENT.confirmMove();
+      }
+
+      if (action && CLIENT.game.energyLeft >= cost) {
+        CLIENT.game.currentActions.push({id: id, action: action, data: data});
+
+        if (action.split('-')[0] == "move" && action.split('-')[1] != 'wait' && action.split('-')[1] != 'panic' && action.split('-')[1] != 'back_away') {
+          CLIENT.mode = 'move';
+          CLIENT.moveTiles = [];
+
+        } else {
+          CLIENT.mode = '';
+          //CLIENT.animateProperty("playerenergy", CLIENT.game.energyLeft, CLIENT.game.energyLeft - cost, 500);
+          //CLIENT.game.energyLeft -= cost;
+          CLIENT.reduceEnergy(cost);
+          CLIENT.game.sendCurrentActions();
+        }
+
+        CANVAS.actionDeselect();
+        CANVAS.touchDown = false;
+      }
+    };
+
+    gameDiv.ontouchmove = gameDiv.onmousemove = function (e) {
+      var cX = e.clientX || e.changedTouches[0].clientX;
+      var cY = e.clientY || e.changedTouches[0].clientY;
+      var target = document.elementFromPoint(cX, cY);
+      CANVAS.hoverActionTarget(target);
+      /*for (var i in CLIENT.action_bar_types) {
+        var type = CLIENT.action_bar_types[i];
+        for (var j = 0; j < type.children.length; ++j) {
+          var li = type.children[j];
+          if (li != target) li.classList.remove('hovered');
+          else              li.classList.add('hovered');
+        }
+      }*/
+    };
+
+    gameDiv.onmouseup = gameDiv.ontouchend = function (e) {
+      if (CANVAS.touchDown) CLIENT.gameDiv.onclick(e);
+    }
+
+    var interval = setInterval(function () {
+      CLIENT.game.turnLeft = (data.time - (+ new Date())) / (data.time - turnStartTime) ;
+    }, 1000 / 30);
+
+    var timeout = setTimeout(function () {
+      if (CLIENT.mode == 'move') CLIENT.confirmMove();
+      console.log("Turn ended. No actions can be emitted now. Wait for the next turn.");
+      gameDiv.onclick = function () {};
+      clearInterval(interval);
+    }, data.time - turnStartTime);
+  };
+
+  CLIENT.Game.prototype.sendCurrentActions = function () {
+    CLIENT.emit('turn-actions', {actions: this.currentActions});
+  };
+
+  CLIENT.turnProcess = function (data) {
+    console.log("Visualizing turn events.");
+
+    if (data.actions.length == 0) return;
+
+    CLIENT.game.state = 'visualize_turn';
+    CANVAS.actionDeselect();
+
+    (function actionLoop (i) {
+      var act = data.actions[data.actions.length - i];
+      var prevTime = data.actions[data.actions.length - i].time;
+      var time = data.actions.length == i ? 0 : data.actions[data.actions.length - i - 1].time;
+
+      setTimeout(function () {
+
+        //console.log(act.playerId + " - " + act.type, act);
+
+        CLIENT.game.status.pid = act.playerId;
+        CLIENT.game.status.msg = "";
+        CLIENT.game.status.show = false;
+
+        if (act.type == 'melee') {
+          var hitDelay = prevTime / 3 * 2;
+          CLIENT.animateProperty(act.playerId == CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 5, 7, prevTime);
+          if (act.data.status == 'hit' || act.data.status == 'crit') {
+            var crit = act.data.status == 'crit';
+            setTimeout(function () {
+              CLIENT.animateProperty(act.enemyId == CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 9, 10, prevTime - hitDelay);
+            }, hitDelay);
+            if (act.enemyId == CLIENT.game.player.id) {
+              setTimeout (function () {
+                CLIENT.animateProperty("playerhp", CLIENT.game.player.hp, Math.max(0, CLIENT.game.player.hp - act.data.damage), 1000);
+                CLIENT.game.player.hp = Math.max(0, CLIENT.game.player.hp - act.data.damage);
+              }, hitDelay);
+            }
+            CLIENT.game.showStatus(act.playerId, (crit ? "CRIT HIT! " : "Auch! ") + act.data.damage, hitDelay);
+          } else if (act.data.status == 'evade') {
+            setTimeout(function () {
+              CLIENT.animateProperty(act.enemyId == CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 11, 12, prevTime - hitDelay);
+            }, hitDelay);
+            CLIENT.game.showStatus(act.playerId, "Miss!", hitDelay);
+          } else if (act.data.status == 'miss') {
+            CLIENT.game.showStatus(act.playerId, "Miss!", hitDelay);
+          } else if (act.data.status == 'far') {
+            CLIENT.game.showStatus(act.playerId, "Too far!", hitDelay);
+          }
+        } if (act.type == 'range') {
+          var char = act.playerId == CLIENT.game.player.id ? CLIENT.game.player : CLIENT.game.enemy;
+          var target = act.enemyId == CLIENT.game.player.id ? CLIENT.game.player : CLIENT.game.enemy
+          if (act.data.type != 'bomb') {
+            CLIENT.game.ammuSprite = [char.bow, char.facing];
+            CLIENT.animateProperty(char.id == CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 13, 16, prevTime);
+            var frameTime = prevTime / 4;
+            var hitDelay = frameTime * 3;
+            var shootDelay = frameTime * 2;
+          } else {
+            CLIENT.game.ammuSprite = [2, char.bomb];
+            CLIENT.animateProperty(char.id == CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 17, 19, prevTime);
+            var frameTime = prevTime / 3;
+            var hitDelay = frameTime * 2;
+            var shootDelay = frameTime;
+          }
+          if (act.data.status == 'hit' || act.data.status == 'crit') {
+            var crit = act.data.status == 'crit';
+            setTimeout(function () {
+              if (act.data.type != 'bomb') {
+                CLIENT.animateProperty(char.id != CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 9, 10, frameTime);
+              } else {
+                CLIENT.animateProperty(char.id != CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 20, 21, frameTime);
+              }
+            }, hitDelay);
+            setTimeout(function () {
+              CLIENT.animateProperty('ammupos', {x: char.posx, y: char.posy}, {x: target.posx, y: target.posy}, frameTime);
+            }, shootDelay);
+            if (target.id == CLIENT.game.player.id) {
+              setTimeout (function () {
+                CLIENT.animateProperty("playerhp", CLIENT.game.player.hp, Math.max(0, CLIENT.game.player.hp - act.data.damage), 1000);
+                CLIENT.game.player.hp = Math.max(0, CLIENT.game.player.hp - act.data.damage);
+              }, hitDelay);
+            }
+            CLIENT.game.showStatus(act.playerId, (crit ? "CRIT HIT! " : "Auch! ") + act.data.damage, hitDelay);
+          } else if (act.data.status == 'double-hit') {
+            var crit = act.data.status == 'crit';
+            setTimeout(function () {
+              CLIENT.animateProperty('ammupos', {x: char.posx, y: char.posy}, {x: target.posx, y: target.posy}, frameTime / 2);
+            }, shootDelay);
+            setTimeout(function () {
+              CLIENT.animateProperty(char.id != CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 9, 10, frameTime);
+              CLIENT.animateProperty('ammupos', {x: char.posx, y: char.posy}, {x: target.posx, y: target.posy}, frameTime / 2);
+            }, hitDelay - frameTime / 2);
+            if (target.id == CLIENT.game.player.id) {
+              setTimeout (function () {
+                CLIENT.animateProperty("playerhp", CLIENT.game.player.hp, Math.max(0, CLIENT.game.player.hp - act.data.damage), 1000);
+                CLIENT.game.player.hp = Math.max(0, CLIENT.game.player.hp - act.data.damage);
+              }, hitDelay);
+            }
+            CLIENT.game.showStatus(act.playerId, (crit ? "CRIT HIT! " : "Auch! ") + act.data.damage, hitDelay);
+          } else if (act.data.status == 'evade') {
+            setTimeout(function () {
+              CLIENT.animateProperty(act.enemyId == CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 11, 12, prevTime - hitDelay);
+            }, hitDelay);
+            setTimeout(function () {
+              CLIENT.animateProperty('ammupos', {x: char.posx, y: char.posy}, {x: target.posx, y: target.posy}, frameTime);
+            }, shootDelay);
+            CLIENT.game.showStatus(act.playerId, "Miss!", hitDelay);
+          } else if (act.data.status == 'miss') {
+            CLIENT.game.showStatus(act.playerId, "Miss!", hitDelay);
+          } else if (act.data.status == 'close') {
+            CLIENT.game.showStatus(act.playerId, "Too close!", hitDelay);
+          }
+        } else if (act.type == 'magic' || act.type == 'magic2') {
+          var char = act.playerId == CLIENT.game.player.id ? CLIENT.game.player : CLIENT.game.enemy;
+          var target = act.enemyId == CLIENT.game.player.id ? CLIENT.game.player : CLIENT.game.enemy
+          if (act.data.type == 'close_range') {
+            CLIENT.animateProperty(char.id == CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 17, 19, prevTime);
+            var frameTime = prevTime / 2;
+            var hitDelay = frameTime;
+            var shootDelay = frameTime;
+          } else if (act.data.type == 'long_range') {
+            CLIENT.game.ammuSprite = [3, act.data.sprite];
+            CLIENT.animateProperty(char.id == CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 22, 26, prevTime);
+            var frameTime = prevTime / 5;
+            var hitDelay = frameTime * 4;
+            var shootDelay = frameTime * 3;
+          } else if (act.data.type == 'debuff') {
+            CLIENT.game.ammuSprite = [4, 1];
+            CLIENT.animateProperty(char.id == CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 25, 26, prevTime);
+            CLIENT.animateProperty('ammupos', {x: char.posx, y: char.posy}, {x: char.posx, y: char.posy - 1}, prevTime * 2 / 3);
+            CLIENT.game.showStatus(act.playerId, act.data.name, 0);
+            var frameTime = prevTime / 3;
+            var hitDelay = frameTime * 2;
+          } else {
+            CLIENT.game.ammuSprite = [4, 0];
+            CLIENT.animateProperty(char.id == CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 25, 26, prevTime);
+            CLIENT.animateProperty('ammupos', {x: char.posx, y: char.posy}, {x: char.posx, y: char.posy - 1}, prevTime * 2 / 3);
+            CLIENT.game.showStatus(act.playerId, act.data.name, 0);
+          }
+          if (act.data.status == 'hit' || act.data.status == 'crit') {
+            var crit = act.data.status == 'crit';
+            setTimeout(function () {
+              CLIENT.animateProperty(char.id != CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 27, 28, frameTime);
+            }, hitDelay);
+            setTimeout(function () {
+              CLIENT.animateProperty('ammupos', {x: char.posx, y: char.posy}, {x: target.posx, y: target.posy}, frameTime);
+            }, shootDelay);
+            if (target.id == CLIENT.game.player.id) {
+              setTimeout (function () {
+                CLIENT.animateProperty("playerhp", CLIENT.game.player.hp, Math.max(0, CLIENT.game.player.hp - act.data.damage), 1000);
+                CLIENT.game.player.hp = Math.max(0, CLIENT.game.player.hp - act.data.damage);
+              }, hitDelay);
+            }
+            CLIENT.game.showStatus(act.playerId, (crit ? "CRIT HIT! " : "Auch! ") + act.data.damage, hitDelay);
+          } else if (act.data.status == 'double-hit') {
+            var crit = act.data.status == 'crit';
+            setTimeout(function () {
+              CLIENT.animateProperty('ammupos', {x: char.posx, y: char.posy}, {x: target.posx, y: target.posy}, frameTime / 2);
+            }, shootDelay);
+            setTimeout(function () {
+              CLIENT.animateProperty(char.id != CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 27, 28, frameTime);
+              CLIENT.animateProperty('ammupos', {x: char.posx, y: char.posy}, {x: target.posx, y: target.posy}, frameTime / 2);
+            }, hitDelay - frameTime / 2);
+            if (target.id == CLIENT.game.player.id) {
+              setTimeout (function () {
+                CLIENT.animateProperty("playerhp", CLIENT.game.player.hp, Math.max(0, CLIENT.game.player.hp - act.data.damage), 1000);
+                CLIENT.game.player.hp = Math.max(0, CLIENT.game.player.hp - act.data.damage);
+              }, hitDelay);
+            }
+            CLIENT.game.showStatus(act.playerId, (crit ? "CRIT HIT! " : "Auch! ") + act.data.damage, hitDelay);
+          } else if (act.data.status == 'restore') {
+            if (char.id == CLIENT.game.player.id) {
+              setTimeout (function () {
+                CLIENT.animateProperty("playerhp", CLIENT.game.player.hp, Math.max(0, CLIENT.game.player.hp + act.data.health), 1000);
+                CLIENT.game.player.hp = Math.max(0, CLIENT.game.player.hp + act.data.health);
+              }, prevTime / 2);
+            }
+            CLIENT.game.showStatus(act.playerId, "Heal! " + act.data.health, hitDelay);
+          } else if (act.data.status == 'teleport') {
+            setTimeout(function () {
+              char.posx = act.data.pos.x;
+              char.posy = act.data.pos.y;
+            }, prevTime / 2);
+          } else if (act.data.status == 'resist') {
+            setTimeout(function () {
+              CLIENT.animateProperty(act.enemyId == CLIENT.game.player.id ? 'playersprite' : 'enemysprite', 25, 26, prevTime - hitDelay);
+            }, hitDelay);
+            if (act.data.type != 'debuff') {
+              setTimeout(function () {
+                CLIENT.animateProperty('ammupos', {x: char.posx, y: char.posy}, {x: target.posx, y: target.posy}, frameTime);
+              }, shootDelay);
+            }
+            CLIENT.game.showStatus(act.playerId, "Resisted!", hitDelay);
+          } else if (act.data.status == 'fizzle') {
+            CLIENT.game.showStatus(act.playerId, "Fizzle!", hitDelay);
+          } else if (act.data.status == 'close') {
+            CLIENT.game.showStatus(act.playerId, "Too close!", hitDelay);
+          } else if (act.data.status == 'far') {
+            CLIENT.game.showStatus(act.playerId, "Too far!", hitDelay);
+          } else if (act.data.status == 'teleport-fail') {
+            CLIENT.game.showStatus(act.playerId, "Teleport failed!", hitDelay);
+          }
+        } else if (act.type == 'move') {
+          if (act.data.status == 'success') {
+            var char = (act.playerId == CLIENT.game.player.id) ? CLIENT.game.player : CLIENT.game.enemy;
+            char.facing = act.data.pos.x == char.posx ? (act.data.pos.y > char.posy ? 2 : 0) : (act.data.pos.x > char.posx ? 1 : 3);
+            CLIENT.animateProperty(act.playerId == CLIENT.game.player.id ? 'playerpos' : 'enemypos', {x: char.posx, y: char.posy}, act.data.pos, prevTime);
+            CLIENT.game.showStatus(act.playerId, "Move", 0);
+            CLIENT.animateProperty(char == CLIENT.game.player ? 'playersprite' : 'enemysprite', 1, 4, prevTime);
+          } else {
+            CLIENT.game.showStatus(act.playerId, "Movement failed!", 0);
+          }
+        } else if (act.type == 'death') {
+          var char = (act.playerId == CLIENT.game.player.id) ? CLIENT.game.player : CLIENT.game.enemy;
+          CLIENT.animateProperty(char == CLIENT.game.player ? 'playersprite' : 'enemysprite', 28, 31, prevTime);
+          CLIENT.game.showStatus(act.enemyId, act.data.taunt, 0);
+
+          setTimeout(function () { CLIENT.gameEnd(act.data, act.enemyId == CLIENT.game.player.id) }, 3000);
+        }
+
+        if (--i) actionLoop(i);
+
+        if (act.type != 'death') {
+          setTimeout(function () {
+            CLIENT.game.calculateFacings();
+            CLIENT.game.player.spriteIndex = 0;
+            CLIENT.game.enemy.spriteIndex = 0;
+            CLIENT.game.ammuSprite = [5, 3];
+            CLIENT.game.ammuPos = null;
+          }, prevTime);
+        }
+      }, time + SHARED.timeBetweenTurns)
+    }) (data.actions.length);
+
+  };
+
+  CLIENT.gameEnd = function (data, isWinner) {
+    delete CLIENT.game;
+    CLIENT.game == null;
+    CLIENT.ingame = false;
+    CLIENT.townDiv.style.display = "block";
+
+    var report;
+    if (isWinner) report = data.report.w;
+    else          report = data.report.l;
+
+    var br = `
+    <div style='text-align: center; margin-bottom: 5px;'>Battle report</div>
+    <div>Respect: ` + (report.r > 0 ? `+` : ``) + report.r + `</div>`
+    + (report.l ? `<div style='color: #34bf3a;'>Level Up!</div>`
+                : `<div>Progress: +` + report.p + `%</div>`);
+
+    CLIENT.user.updateCharacter();
+
+    var dlg = new Dialog(br, [{
+      name: "OK",
+      callback: function () {},
+    }]);
+    dlg.show();
+  };
+
+  CLIENT.alert = function (data) {
+    var dlg = new Dialog(data.content, data.no_ok ? [] : [{
+      name: "OK",
+      callback: function () {},
+    }]);
+    dlg.show();
+  };
+
+  CLIENT.authFailure = function (data) {
+    CLIENT.ui.screen("login");
+    var dlg = new Dialog("User authentication failed. Please re-log.", [{ name: "OK" }]);
+    dlg.show();
+  };
+
+  // events
+
+  CLIENT.socket.on('online-players', CLIENT.updateOnlineList);
+  CLIENT.socket.on('challenge-request', CLIENT.showChallengeRequest);
+  CLIENT.socket.on('game-start', CLIENT.gameStart);
+  CLIENT.socket.on('turn-start', CLIENT.turnStart);
+  CLIENT.socket.on('turn-process', CLIENT.turnProcess);
+  CLIENT.socket.on('challenges-update', CLIENT.updateChallenges);
+  CLIENT.socket.on('alert', CLIENT.alert);
+  CLIENT.socket.on('auth-failure', CLIENT.authFailure);  // game
+
+
+  CLIENT.render = function () {
+    var ctx = CLIENT.ctx;
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); // clear canvas
+
+    if (CLIENT.ingame) {
+      // paint top bar
+      ctx.fillStyle="#888888";
+      ctx.fillRect(0, 0, CANVAS.canvas.width, CANVAS.top_h);
+
+      // hp, energy, time bar backgrounds
+      ctx.fillStyle="#ffe9e9"; ctx.fillRect(10, 10, CANVAS.canvas.width - 20, 6); // hp ffe9e9
+      ctx.fillStyle="#fdf4e3"; ctx.fillRect(10, 23, CANVAS.canvas.width - 20, 6); // energy fdf4e3
+      ctx.fillStyle="#cadaff"; ctx.fillRect(10, 36, CANVAS.canvas.width - 20, 6); // time cadaff
+
+      // hp, energy, time bar foregrounds
+      ctx.fillStyle="#e87777"; ctx.fillRect(10, 10, (CANVAS.canvas.width - 20) * (CLIENT.animatedProperties.hp / CLIENT.game.player.maxHp), 6); // hp e87777
+      ctx.fillStyle="#f9e0b4"; ctx.fillRect(10, 23, (CANVAS.canvas.width - 20) * CLIENT.animatedProperties.energy / 100, 6);  // energy f9e0b4
+      ctx.fillStyle="#f7b94a"; ctx.fillRect(10, 23, (CANVAS.canvas.width - 20) * CLIENT.game.energyLeft / 100, 6);  // energy f7b94a
+      ctx.fillStyle="#91b2ff"; ctx.fillRect(10, 36, (CANVAS.canvas.width - 20) * CLIENT.game.turnLeft, 6); // time 91b2ff
+
+      // hp, energy, time bar strokes
+      ctx.strokeStyle="#d05353"; ctx.strokeRect(9, 9, CANVAS.canvas.width - 20 + 1, 7);  // hp d05353
+      ctx.strokeStyle="#b19157"; ctx.strokeRect(9, 22, CANVAS.canvas.width - 20 + 1, 7); // energy b19157
+      ctx.strokeStyle="#4d67a5"; ctx.strokeRect(9, 35, CANVAS.canvas.width - 20 + 1, 7); // time 4d67a5
+
+
+      // paint the battlefield
+      ctx.drawImage(ASSETS.SPRITES.battlefield, 0, 0, CANVAS.bfieldfull_w, CANVAS.bfieldfull_h, 0, CANVAS.top_h, CANVAS.canvas.width, CANVAS.bfieldfull_h);
+
+
+      // paint tile under pointer
+      if (CLIENT.pointerPos.x != null && CLIENT.pointerPos.y != null) {
+        ctx.fillStyle="#c9dff3";
+        ctx.fillRect(CLIENT.pointerPos.x * CANVAS.tile_w + 2, CLIENT.pointerPos.y * CANVAS.tile_h + CANVAS.bfield_offset_y + 1, CANVAS.tile_w - 4, CANVAS.tile_h - 2);
+      }
+
+      // paint movement selection
+      // first paint all previous movement
+      if (CLIENT.mode == "move") {
+        ctx.fillStyle="#9eec9d";
+        for (var i = 0; i < CLIENT.moveTiles.length; ++i) {
+          var tile = CLIENT.moveTiles[i];
+          ctx.fillRect(tile.x * CANVAS.tile_w + 4, tile.y * CANVAS.tile_h + CANVAS.bfield_offset_y + 3, CANVAS.tile_w - 8, CANVAS.tile_h - 6);
+        }
+        ctx.fillStyle="#51bf50";
+        if (CLIENT.mode == "move") {
+          ctx.fillRect(CLIENT.lastTile.x * CANVAS.tile_w + 4, CLIENT.lastTile.y * CANVAS.tile_h + CANVAS.bfield_offset_y + 3, CANVAS.tile_w - 8, CANVAS.tile_h - 6);
+        }
+      } else {
+        ctx.fillStyle="#0000003b";
+        ctx.fillRect(CLIENT.lastTile.x * CANVAS.tile_w + 3, CLIENT.lastTile.y * CANVAS.tile_h + CANVAS.bfield_offset_y + 2, CANVAS.tile_w - 6, CANVAS.tile_h - 4);
+      }
+
+      // then paint unconfirmed new movement
+      if (CLIENT.mode == "move" && SHARED.arePositionsAdjacent({x: CLIENT.pointerPos.x, y: CLIENT.pointerPos.y}, CLIENT.lastTile)) {
+        ctx.fillStyle="#af8b7e";
+        ctx.fillRect(CLIENT.pointerPos.x * CANVAS.tile_w + 4, CLIENT.pointerPos.y * CANVAS.tile_h + CANVAS.bfield_offset_y + 3, CANVAS.tile_w - 8, CANVAS.tile_h - 6);
+      }
+
+      // if hovering last tile, show check mark icon
+      if (CLIENT.mode == "move" && CLIENT.pointerPos.x == CLIENT.lastTile.x && CLIENT.pointerPos.y == CLIENT.lastTile.y) {
+        ctx.drawImage(ASSETS.SPRITES.check, 0, 0, 16, 16, CLIENT.pointerPos.x * CANVAS.tile_w + 8, CLIENT.pointerPos.y * CANVAS.tile_h + CANVAS.bfield_offset_y - 9, 16, 16);
+      }
+
+      // whoever is facing South should be drawn first
+      var py = Math.round(CLIENT.game.player.posy);
+      var ey = Math.round(CLIENT.game.enemy.posy);
+      if (py < ey) {
+        CLIENT.drawCharSprite(CLIENT.game.player.spriteIndex, {x: CLIENT.game.player.posx, y: CLIENT.game.player.posy}, CLIENT.game.player.facing, CLIENT.game.player.weapon);
+        CLIENT.drawCharSprite(CLIENT.game.enemy.spriteIndex, {x: CLIENT.game.enemy.posx, y: CLIENT.game.enemy.posy}, CLIENT.game.enemy.facing, CLIENT.game.enemy.weapon);
+      } else {
+        CLIENT.drawCharSprite(CLIENT.game.enemy.spriteIndex, {x: CLIENT.game.enemy.posx, y: CLIENT.game.enemy.posy}, CLIENT.game.enemy.facing, CLIENT.game.enemy.weapon);
+        CLIENT.drawCharSprite(CLIENT.game.player.spriteIndex, {x: CLIENT.game.player.posx, y: CLIENT.game.player.posy}, CLIENT.game.player.facing, CLIENT.game.player.weapon);
+      }
+
+      // 11 actions
+      ctx.fillStyle="#888888";
+      ctx.drawImage(ASSETS.SPRITES.action_bar, 0, 0, CANVAS.canvas.width, CANVAS.actions_h + CANVAS.bottom_h, 0, CANVAS.top_h + CANVAS.bfieldfull_h, CANVAS.canvas.width, CANVAS.actions_h + CANVAS.bottom_h);
+
+      for (var i = 0; i < 11; ++i) {
+        if (CLIENT.game.currentActions.length > i) {
+          var img = ASSETS.ACTION_SPRITES[CLIENT.game.currentActions[i].action.split('-')[0]];
+          ctx.drawImage(img, 1, 1, 14, 14, 1 + i * (14 + 2), CANVAS.top_h + CANVAS.bfieldfull_h + 1, 14, 14);
+        }
+      }
+
+      // available action bar/status bar
+      if (CLIENT.game.state == 'visualize_turn' && CLIENT.game.status.msg != "") {
+        if (CLIENT.game.status.pid == CLIENT.game.player.id) {
+          ctx.fillStyle="#1f9424"; // GREEN
+        } else if (CLIENT.game.status.pid == CLIENT.game.enemy.id) {
+          ctx.fillStyle="#ca1f1f"; // RED
+        }
+        ctx.fillRect(0, CANVAS.top_h + CANVAS.bfieldfull_h + CANVAS.actions_h, CANVAS.canvas.width, CANVAS.bottom_h);
+
+        ctx.font = "16px Courier";
+        ctx.fillStyle="#ffffff";
+        ctx.fillText(CLIENT.game.status.show ? CLIENT.game.status.msg : "", 5, CANVAS.top_h + CANVAS.bfieldfull_h + CANVAS.actions_h + CANVAS.bottom_h - 7);
+
+      } else {
+        for (var i = 0; i < CANVAS.actions.length; ++i) {
+          if (CANVAS.hoveredAction == i) {
+            ctx.drawImage(ASSETS.SPRITES.hovered_action, 0, 0, 22, 22, i * 22, CANVAS.top_h + CANVAS.bfieldfull_h + CANVAS.actions_h, 22, 22);
+          }
+          if (CANVAS.selectedAction == i) {
+            ctx.drawImage(ASSETS.SPRITES.selected_action, 0, 0, 22, 22, i * 22, CANVAS.top_h + CANVAS.bfieldfull_h + CANVAS.actions_h, 22, 22);
+          }
+          ctx.drawImage(ASSETS.ACTION_SPRITES[CANVAS.actions[i]], 0, 0, 16, 16, 3 + i * (16 + 6), CANVAS.top_h + CANVAS.bfieldfull_h + CANVAS.actions_h + 3, 16, 16);
+        }
+      }
+    }
+
+    window.requestAnimationFrame(CLIENT.render);
+  }
+
+  var sheet1, sheet2, sheet1X, sheet1Y, sheet2X,
+      sheet2Y, tileLeft, tileTop, tileCenterX,
+      tileCenterY, left1, left2, top1, top2,
+      sheet3, sheet3X, sheet3Y, left3, top3, wepIndex,
+      sheet4, sheet4X, sheet4Y, left4, top4;
+  CLIENT.drawCharSprite = function (index, tile, facing, weapon) { // facing - 0, 1, 2, 3 = N, E, S, W
+    // torso
+    sheet1 = ASSETS.SPRITES.torso;
+    sheet1X = CANVAS.char_w * index;
+    sheet1Y = CANVAS.char_h * facing;
+    tileLeft = tile.x * CANVAS.tile_w;
+    tileTop = tile.y * CANVAS.tile_h + CANVAS.bfield_offset_y;
+    tileCenterX = tileLeft + CANVAS.tile_w / 2;
+    tileCenterY = tileTop + CANVAS.tile_h / 2;
+    left1 = tileCenterX - CANVAS.char_w / 2;
+    top1 = tileCenterY - CANVAS.char_h + 5;
+
+    if (!(tile.x % 1)) {
+      left1 = Math.round(left1);
+    }
+    if (!(tile.y % 1)) {
+      top1 = Math.round(top1);
+    }
+
+    // ammunition
+    if (CLIENT.game.ammuPos != null) {
+      sheet4 = ASSETS.SPRITES.ammu;
+      sheet4X = CANVAS.ammu_w * CLIENT.game.ammuSprite[0];
+      sheet4Y = CANVAS.ammu_h * CLIENT.game.ammuSprite[1];
+
+      left4 = CLIENT.game.ammuPos.x * CANVAS.tile_w + (CANVAS.tile_w - CANVAS.ammu_w) / 2;
+      top4 = CLIENT.game.ammuPos.y * CANVAS.tile_h + CANVAS.bfield_offset_y - CANVAS.char_h + (CANVAS.tile_h + CANVAS.char_h - CANVAS.ammu_h) / 2 + 5;
+    }
+    if (CLIENT.game.ammuPos != null && facing != 1 && facing != 3) {
+      CLIENT.ctx.drawImage(sheet4, sheet4X, sheet4Y, CANVAS.ammu_w, CANVAS.ammu_h, left4, top4, CANVAS.ammu_w, CANVAS.ammu_h);
+    }
+
+
+    // head
+    sheet2 = ASSETS.SPRITES.heads;
+    sheet2X = CANVAS.head_w * 0;
+    sheet2Y = CANVAS.head_h * facing;
+
+    left2 = left1 + CANVAS.HEAD_OFFSETS[index][facing * 2] - Math.round(CANVAS.head_w / 2);
+    top2 = top1 + CANVAS.HEAD_OFFSETS[index][facing * 2 + 1] - CANVAS.head_h - 1;
+
+    if (CANVAS.HEAD_ORDER[index]) {
+      CLIENT.ctx.drawImage(sheet1, sheet1X, sheet1Y, CANVAS.char_w, CANVAS.char_h, left1, top1, CANVAS.char_w, CANVAS.char_h);
+      CLIENT.ctx.drawImage(sheet2, sheet2X, sheet2Y, CANVAS.head_w, CANVAS.head_h, left2, top2, CANVAS.head_w, CANVAS.head_h);
+    } else {
+      CLIENT.ctx.drawImage(sheet2, sheet2X, sheet2Y, CANVAS.head_w, CANVAS.head_h, left2, top2, CANVAS.head_w, CANVAS.head_h);
+      CLIENT.ctx.drawImage(sheet1, sheet1X, sheet1Y, CANVAS.char_w, CANVAS.char_h, left1, top1, CANVAS.char_w, CANVAS.char_h);
+    }
+
+    // ammunition
+    if (CLIENT.game.ammuPos != null && facing != 0 && facing != 2) {
+      CLIENT.ctx.drawImage(sheet4, sheet4X, sheet4Y, CANVAS.ammu_w, CANVAS.ammu_h, left4, top4, CANVAS.ammu_w, CANVAS.ammu_h);
+    }
+
+    // weapon
+    if (CANVAS.WEAPON_INDEXES.hasOwnProperty(index)) {
+      sheet3 = ASSETS.SPRITES.weapons;
+      wepIndex = CANVAS.WEAPON_INDEXES[index][facing];
+      sheet3X = CANVAS.weapon_w * wepIndex;
+      sheet3Y = CANVAS.weapon_h * weapon; // CLIENT.game.player.weapon / enemy
+
+      left3 = left1 + CANVAS.HAND_OFFSETS[index][facing * 2] - CANVAS.WEAPON_OFFSETS[weapon][wepIndex * 2];
+      top3 = top1 + CANVAS.HAND_OFFSETS[index][facing * 2 + 1] - CANVAS.WEAPON_OFFSETS[weapon][wepIndex * 2 + 1];
+
+      CLIENT.ctx.drawImage(sheet3, sheet3X, sheet3Y, CANVAS.weapon_w, CANVAS.weapon_h, left3, top3, CANVAS.weapon_w, CANVAS.weapon_h);
+    }
+  };
+
+
+  CLIENT.animateProperty = function (propName, from, to, duration) {
+    if (CLIENT.animatedProperties.hasOwnProperty(propName)) {
+      clearTimeout(CLIENT.animatedProperties[propName].timeout);
+      clearInterval(CLIENT.animatedProperties[propName].interval);
+      //CLIENT.animatedProperties[propName].f(CLIENT.animatedProperties[propName].to);
+    }
+
+    var f = function () {};
+    switch (propName) {
+      case 'playerhp':
+        f = function (val) { CLIENT.animatedProperties.hp = val; };
+        break;
+      case 'playerenergy':
+        f = function (val) { CLIENT.animatedProperties.energy = val; };
+        break;
+      case 'playerpos':
+        f = function (val) {
+          CLIENT.game.player.posx = val.x;
+          CLIENT.game.player.posy = val.y;
+        };
+        break;
+      case 'enemypos':
+        f = function (val) {
+          CLIENT.game.enemy.posx = val.x;
+          CLIENT.game.enemy.posy = val.y;
+        };
+        break;
+      case 'playersprite':
+        f = function (val) {
+          CLIENT.game.player.spriteIndex = Math.ceil(((val - from) * (to - from + 1)) / (to - from)) + from - 1;
+          if (val == to && val != 31) CLIENT.game.player.spriteIndex = 0;
+        };
+        break;
+      case 'enemysprite':
+        f = function (val) {
+          CLIENT.game.enemy.spriteIndex = Math.ceil(((val - from) * (to - from + 1)) / (to - from)) + from - 1;
+          if (val == to && val != 31) CLIENT.game.enemy.spriteIndex = 0;
+        };
+        break;
+      case 'ammupos':
+        f = function (val) {
+          CLIENT.game.ammuPos = val;
+          if (val == to) CLIENT.game.ammuPos = null;
+        };
+        break;
+    }
+
+    CLIENT.animatedProperties[propName] = {}
+    CLIENT.animatedProperties[propName].f = f;
+    //CLIENT.animatedProperties[propName].to = to;
+
+    var startTime = + new Date();
+    var endTime = startTime + duration;
+
+    CLIENT.animatedProperties[propName].interval = setInterval(function () {
+      if (CLIENT.animatedProperties.hasOwnProperty(propName)) {
+        var t = (+ new Date() - startTime) / (duration);
+        if (propName == 'playerhp' || propName == 'playerenergy') {
+          var val = from + (to - from) * ((--t)*t*t+1);
+        } else if (propName == 'playerpos' || propName == 'enemypos' || propName == 'ammupos') {
+          var val = {
+            x: from.x + (to.x - from.x) * t,
+            y: from.y + (to.y - from.y) * t,
+          }
+        } else if (propName == 'playersprite' || propName == 'enemysprite') {
+          var val = from + (to - from) * t;
+        }
+
+        CLIENT.animatedProperties[propName].f(val);
+      }
+    }, 1000 / CLIENT.FPS);
+
+    CLIENT.animatedProperties[propName].timeout = setTimeout(function () {
+      clearInterval(CLIENT.animatedProperties[propName].interval);
+      CLIENT.animatedProperties[propName].f(to);
+
+      delete CLIENT.animatedProperties[propName];
+    }, duration);
+  };
+
+  var DEBUG = {};
+  DEBUG.msgServer = function (e) {
+    CLIENT.emit('debug', e);
+  }
+
+</script>
