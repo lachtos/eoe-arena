@@ -2,6 +2,12 @@
 
 eoe-arena is a remake of the multiplayer mobile game Era of Eidolon which was shut down about 10 years ago
 
+![](eoe-arena-demo.gif)
+
+## Demo / live
+
+Live version of the project is accessible at [http://eoe-arena.herokuapp.com](http://eoe-arena.herokuapp.com)
+
 ## Getting Started
 
 Both the backend (NodeJS) and the frontend is written in vanilla JavaScript. Communication bridge in-between is done using sockets and ajax calls. Data for the application is stored in MongoDB database.
