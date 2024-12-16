@@ -150,8 +150,8 @@ SERVER.init = function () {
   // MongoDB init
   var mongo_user = process.env.MONGO_USER;
   var mongo_pass = process.env.MONGO_PASS;
-  var mongo_url  = process.env.MONGO_URL;
-  var uri = "mongodb+srv://" + mongo_user + ":" + mongo_pass + "@eoe-shard-00-00.bsdxx.mongodb.net:27017,eoe-shard-00-01.bsdxx.mongodb.net:27017,eoe-shard-00-02.bsdxx.mongodb.net:27017/game?ssl=true&authSource=admin&retryWrites=true";
+  var mongo_set  = process.env.MONGO_SET;
+  var uri = "mongodb+srv://" + mongo_user + ":" + mongo_pass + "@eoe-shard-00-00.bsdxx.mongodb.net:27017,eoe-shard-00-01.bsdxx.mongodb.net:27017,eoe-shard-00-02.bsdxx.mongodb.net:27017/game?ssl=true&authSource=admin&retryWrites=true&repliceSet=" + mongo_set;
   // const uri = "mongodb+srv://" + mongo_user + ":" + mongo_pass + "@" + mongo_url + "/game?retryWrites=true&authSource=admin&w=majority&appName=eoe";
   this.db = require("mongojs")(uri, ['users', 'characters', 'skills', 'items', 'finished_battles']);
 	
