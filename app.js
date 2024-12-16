@@ -151,7 +151,8 @@ SERVER.init = function () {
   var mongo_user = process.env.MONGO_USER;
   var mongo_pass = process.env.MONGO_PASS;
   var mongo_url  = process.env.MONGO_URL;
-  const uri = "mongodb+srv://" + mongo_user + ":" + mongo_pass + "@" + mongo_url + "/?retryWrites=true&w=majority&appName=eoe";
+	console.log(mongo_url);
+  const uri = "mongodb+srv://" + mongo_user + ":" + mongo_pass + "@" + mongo_url + "/eoe?retryWrites=true&w=majority&appName=eoe";
   this.db = require("mongojs")(uri, ['users', 'characters', 'skills', 'items', 'finished_battles']);
 	
   // var connString = 'mongodb://' + mongo_user + ':' + mongo_pass + '@eoe-cluster-shard-00-00-tsy5s.mongodb.net:27017,eoe-cluster-shard-00-01-tsy5s.mongodb.net:27017,eoe-cluster-shard-00-02-tsy5s.mongodb.net:27017/game?ssl=true&replicaSet=EOE-Cluster-shard-0&authSource=admin&retryWrites=true';
