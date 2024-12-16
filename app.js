@@ -150,15 +150,11 @@ SERVER.init = function () {
   // MongoDB init
   var mongo_user = process.env.MONGO_USER;
   var mongo_pass = process.env.MONGO_PASS;
-  var mongo_set  = process.env.MONGO_SET;
-  var uri = "mongodb+srv://" + mongo_user + ":" + mongo_pass + "@eoe-shard-00-00.bsdxx.mongodb.net:27017,eoe-shard-00-01.bsdxx.mongodb.net:27017,eoe-shard-00-02.bsdxx.mongodb.net:27017/game?&appName=eoe&retryWrites=true&replicaSet=" + mongo_set;
-  // const uri = "mongodb+srv://" + mongo_user + ":" + mongo_pass + "@" + mongo_url + "/game?retryWrites=true&authSource=admin&w=majority&appName=eoe";
+  var mongo_url =  process.env.MONGO_URL;
+  console.log(mongo_pass, mongo_user)
+  var uri = "mongodb+srv://" + mongo_user + ":" + mongo_pass + "@" + mongo_url + "/game?&appName=eoe&retryWrites=true";
   this.db = require("mongojs")(uri, ['users', 'characters', 'skills', 'items', 'finished_battles']);
 	
-  // var connString = 'mongodb://' + mongo_user + ':' + mongo_pass + '@eoe-cluster-shard-00-00-tsy5s.mongodb.net:27017,eoe-cluster-shard-00-01-tsy5s.mongodb.net:27017,eoe-cluster-shard-00-02-tsy5s.mongodb.net:27017/game?ssl=true&replicaSet=EOE-Cluster-shard-0&authSource=admin&retryWrites=true';
-  // this.db = require("mongojs")(connString, ['users', 'characters', 'skills', 'items', 'finished_battles']);
-  // this.db = require("mongojs")('localhost:27017/game', ['users', 'characters', 'skills', 'items', 'finished_battles']);
-
   // Socket.io init
   this.io = require('socket.io')(serv, {});
 
@@ -271,7 +267,7 @@ SERVER.getUser = function (data) {
       // user is authenticated, return user info
       var user = SERVER.Sessions[data.token];
       user.getObject().then((obj) => {
-        var prevSocket = user.socket.id;
+        var prevSocket = user.socket?.id;
         user.socket = SERVER.Sockets[data.socket_id];
         delete SERVER.Sockets[prevSocket];
         delete user.dc_timestamp;
@@ -314,7 +310,7 @@ SERVER.loginUser = function (data) {
   return new Promise((resolve, reject) => {
     SERVER.db.users.findOne({ name: data.username, pass: data.password }, function (err, res) {
       if (res) { // found something
-        var token = crypto.randomBytes(64).toString('base64');
+        var token = Math.random().toString();
         var user = new SERVER.User({
           id: res._id, // id from database
           socket: SERVER.getSocketById(data.socket_id),
